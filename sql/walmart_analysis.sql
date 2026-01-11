@@ -1,6 +1,6 @@
 
 -- #########################################################
--- Total transactions and total quantity per payment method
+--1. Total transactions and total quantity per payment method
 -- ##########################################################
 -- Purpose => Understand which payment methods are popular for transaction optimization.
 
@@ -14,7 +14,7 @@ ORDER BY total_transactions DESC;
 
 
 -- ####################################
---  Highest-Rated Category per Branch
+-- 2. Highest-Rated Category per Branch
 -- ####################################
 -- This allows Walmart to recognize and promote popular categories in specific
 -- branches, enhancing customer satisfaction and branch-specific marketing.
@@ -34,7 +34,7 @@ ORDER BY branch;
 
 
 -- ########################################################################
--- busiest day of the week for each branch based on transaction volume
+--3. busiest day of the week for each branch based on transaction volume
 -- ########################################################################
 -- Purpose: Optimize staffing and inventory on peak days.
 
@@ -86,7 +86,7 @@ ORDER BY branch;
 
 
 
---- Calculate Total Quantity Sold by Payment Method
+--- 4. Calculate Total Quantity Sold by Payment Method
 
 SELECT payment_method, SUM(quantity) AS total_items_sold
 FROM sales
@@ -94,7 +94,7 @@ GROUP BY payment_method
 ORDER BY total_items_sold DESC;
 
 
--- Purpose: Guide city-level promotions and tailor regional strategies.
+-- Purpose:5.  Guide city-level promotions and tailor regional strategies.
 
 SELECT city, category,
        AVG(rating) AS avg_rating,
@@ -105,7 +105,7 @@ GROUP BY city, category
 ORDER BY city, category;
 
 
--- Calculate Total Profit by Category
+-- 6. Calculate Total Profit by Category
 -- Purpose: Identify high-profit categories for pricing and promotion strategies.
 
 SELECT category,
@@ -116,7 +116,7 @@ ORDER BY total_profit DESC;
 
 
 
--- Determine the Most Common Payment Method per Branch
+-- 7. Determine the Most Common Payment Method per Branch
 -- Purpose: Streamline branch-specific payment processing.
 
 SELECT * FROM
@@ -128,4 +128,75 @@ SELECT * FROM
  FROM sales
  GROUP BY 1, 2
   )AS ranked_payment
-WHERE rank = 1
+WHERE rank = 1;
+
+
+
+-- ########################################################################
+-- 8. Categorize sales into 3 group MORNING, AFTERNOON, EVENING 
+-- Find out each of the shift and number of invoices
+-- ########################################################################
+
+
+-- SELECT branch,
+--    CASE
+--       WHEN TO_CHAR(TO_TIMESTAMP(time, 'HH24:MI:SS'), 'HH24')::int BETWEEN 6 AND 11 THEN 'Morning'
+-- 	  WHEN TO_CHAR(TO_TIMESTAMP(time, 'HH24:MI:SS'), 'HH24')::int BETWEEN 12 AND 17 THEN 'Afternoon'
+--       ELSE 'Evening'
+--    END AS shift,
+--    COUNT(*) AS total_transactions
+
+--   FROM sales
+-- GROUP BY branch, shift
+-- ORDER BY branch, shift;
+
+
+SELECT
+	branch,
+CASE 
+		WHEN EXTRACT(HOUR FROM(time::time)) < 12 THEN 'Morning'
+		WHEN EXTRACT(HOUR FROM(time::time)) BETWEEN 12 AND 17 THEN 'Afternoon'
+		ELSE 'Evening'
+	END shift,
+	COUNT(*)
+FROM sales
+GROUP BY 1, 2
+ORDER BY 1, 3 DESC;
+
+
+
+-- ########################################################################
+-- 9. Identify 5 branch with highest decrese ratio in 
+-- revevenue compare to last year(current year 2023 and last year 2022)
+
+-- rdr == last_rev-cr_rev/ls_rev*100
+
+-- ########################################################################
+WITH revenue_per_year AS (
+   SELECT
+       branch,
+       EXTRACT(YEAR FROM date) AS year,
+       SUM(total) AS total_revenue
+   FROM sales
+   GROUP BY branch, year
+)
+
+SELECT
+    a.branch,
+    a.year AS current_year,
+    a.total_revenue AS current_revenue,
+    b.total_revenue AS previous_revenue,
+   ROUND(
+     (
+    (b.total_revenue - a.total_revenue)
+        / NULLIF(b.total_revenue, 0)
+       )::numeric * 100,
+  2
+) AS revenue_decline_pct
+
+FROM revenue_per_year a
+JOIN revenue_per_year b
+  ON a.branch = b.branch
+ AND a.year = b.year + 1
+WHERE a.total_revenue < b.total_revenue
+ORDER BY current_year, revenue_decline_pct DESC;
